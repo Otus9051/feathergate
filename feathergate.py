@@ -213,7 +213,7 @@ def main_display_loop():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.K_F1:
+            if event.type == pygame.K_x:
                 running = False
 
         screen.fill((0, 0, 0))
