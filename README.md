@@ -1,2 +1,2 @@
-# feathergate
-A lightweight Frigate viewer based on PyGame
+# Feathergate
+A lightweight Frigate viewer based on PyGame, designed to run on embedded systems.
