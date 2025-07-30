@@ -6,8 +6,10 @@ import time
 import threading
 import json
 import yaml
+import urllib3
 
 CONFIG_FILE = "config.yaml"
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 try:
     with open(CONFIG_FILE, 'r') as f:
@@ -60,7 +62,7 @@ def get_frigate_token(session):
     
     login_url = f"{FRIGATE_BASE_URL}/api/login"
     payload = {
-        "username": FRIGATE_USERNAME,
+        "user": FRIGATE_USERNAME,
         "password": FRIGATE_PASSWORD
     }
     headers = {"Content-Type": "application/json"}
