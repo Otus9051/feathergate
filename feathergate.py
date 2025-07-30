@@ -109,7 +109,7 @@ def fetch_and_process_image_mjpeg(session, camera_name):
                 continue
 
         headers = {"Authorization": f"Bearer {api_token}"}
-        mjpeg_url = f"{FRIGATE_BASE_URL}/api/{camera_name}/mjpeg" 
+        mjpeg_url = f"{FRIGATE_BASE_URL}/api/{camera_name}" 
 
         boundary = b"" 
         try:
@@ -213,7 +213,7 @@ def main_display_loop():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.K_ESCAPE:
+            if event.type == pygame.K_F1:
                 running = False
 
         screen.fill((0, 0, 0))
