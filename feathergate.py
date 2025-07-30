@@ -6,10 +6,6 @@ import time
 import threading
 import json
 import yaml
-import urllib3
-
-# Disable SSL warnings for self-signed certificates
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 CONFIG_FILE = "config.yaml"
 
@@ -23,28 +19,25 @@ except yaml.YAMLError as e:
     print(f"Error parsing {CONFIG_FILE}: {e}")
     exit(1)
 
-# Assign configuration values from YAML
 FRIGATE_BASE_URL = config['frigate']['base_url']
 FRIGATE_USERNAME = config['frigate']['username']
 FRIGATE_PASSWORD = config['frigate']['password']
 CAMERA_NAMES = config['frigate']['camera_names']
 
-DISPLAY_RESOLUTION = tuple(config['display']['resolution']) # Convert list from YAML to tuple
+DISPLAY_RESOLUTION = tuple(config['display']['resolution'])
 GRID_ROWS = config['display']['grid_rows']
 GRID_COLS = config['display']['grid_cols']
 INTERVAL_SECONDS = config['display']['interval_seconds']
 FONT_SIZE = config['display']['font_size']
 
-TOKEN_LIFETIME_SECONDS = config.get('advanced', {}).get('token_lifetime_seconds', 3600 * 24 * 365 * 50) # Default to 50 years if not set
-IMAGE_RESAMPLING_METHOD = getattr(Image.Resampling, config.get('advanced', {}).get('image_resampling', 'LANCZOS').upper(), Image.Resampling.LANCZOS)
+TOKEN_LIFETIME_SECONDS = config.get('advanced', {}).get('token_lifetime_seconds', 3600 * 24 * 365 * 50)
+IMAGE_RESAMPLING_METHOD = getattr(Image.Resampling, config.get('advanced', {}).get('image_resampling', 'BICUBIC').upper(), Image.Resampling.BICUBIC)
 CHUNK_SIZE = config.get('advanced', {}).get('chunk_size', 8192)
 
 FPS_TARGET = 1 / INTERVAL_SECONDS
 SINGLE_IMAGE_WIDTH = DISPLAY_RESOLUTION[0] // GRID_COLS
 SINGLE_IMAGE_HEIGHT = DISPLAY_RESOLUTION[1] // GRID_ROWS
 TARGET_IMAGE_SIZE = (SINGLE_IMAGE_WIDTH, SINGLE_IMAGE_HEIGHT)
-
-# --- END CONFIGURATION LOADING ---
 
 pygame.init()
 screen = pygame.display.set_mode(DISPLAY_RESOLUTION, pygame.FULLSCREEN | pygame.NOFRAME)
@@ -60,14 +53,14 @@ for name in CAMERA_NAMES:
     placeholder_surface.fill((0, 0, 0))
     current_images[name] = placeholder_surface
 
-font = pygame.font.Font(None, FONT_SIZE) 
+font = pygame.font.Font(None, FONT_SIZE)
 
 def get_frigate_token(session):
     global api_token, token_refresh_time
     
     login_url = f"{FRIGATE_BASE_URL}/api/login"
     payload = {
-        "user": FRIGATE_USERNAME,
+        "username": FRIGATE_USERNAME,
         "password": FRIGATE_PASSWORD
     }
     headers = {"Content-Type": "application/json"}
@@ -77,8 +70,6 @@ def get_frigate_token(session):
         response = session.post(login_url, json=payload, headers=headers, verify=False, timeout=10)
         
         print(f"Login API Status Code: {response.status_code}")
-        # print(f"Login API Response Headers: {response.headers}") # Uncomment for debugging
-        # print(f"Login API Response Text (first 500 chars): {response.text[:500]}") # Uncomment for debugging
         
         response.raise_for_status()
 
@@ -105,7 +96,6 @@ def get_frigate_token(session):
         return False
 
 def fetch_and_process_image_mjpeg(session, camera_name):
-    """Opens an MJPEG stream, handles token, and continuously processes new frames."""
     global api_token
 
     while True:
@@ -117,12 +107,12 @@ def fetch_and_process_image_mjpeg(session, camera_name):
                 continue
 
         headers = {"Authorization": f"Bearer {api_token}"}
-        mjpeg_url = f"{FRIGATE_BASE_URL}/api/{camera_name}"
+        mjpeg_url = f"{FRIGATE_BASE_URL}/api/{camera_name}/mjpeg" 
 
         boundary = b"" 
         try:
             response = session.get(mjpeg_url, stream=True, headers=headers, verify=False, timeout=None)
-            response.raise_for_status()
+            response.raise_for_status() 
 
             if response.status_code == 401:
                 print(f"[{camera_name}] MJPEG stream returned 401. Token likely invalid. Forcing refresh.")
@@ -139,8 +129,8 @@ def fetch_and_process_image_mjpeg(session, camera_name):
                 boundary = (b'--' + boundary_raw.encode('utf-8'))
                 print(f"[{camera_name}] Detected MJPEG boundary: {boundary.decode()}")
             else:
-                print(f"[{camera_name}] Warning: No MJPEG boundary found in Content-Type: {content_type}. Using common fallback.")
-                boundary = b'--frigate_boundary'
+                print(f"[{camera_name}] Warning: No MJPEG boundary found. Using common fallback.")
+                boundary = b'--frigate_boundary' 
 
             if not boundary:
                 print(f"[{camera_name}] Critical: Could not determine MJPEG boundary. Retrying stream in 5s...")
@@ -148,7 +138,7 @@ def fetch_and_process_image_mjpeg(session, camera_name):
                 continue
 
             bytes_read = b''
-            for chunk in response.iter_content(chunk_size=8192): 
+            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                 bytes_read += chunk
                 
                 a = bytes_read.find(boundary)
@@ -163,7 +153,7 @@ def fetch_and_process_image_mjpeg(session, camera_name):
                             try:
                                 img = Image.open(io.BytesIO(image_data))
                                 img = img.convert("RGB")
-                                img = img.resize(TARGET_IMAGE_SIZE, Image.Resampling.LANCZOS)
+                                img = img.resize(TARGET_IMAGE_SIZE, IMAGE_RESAMPLING_METHOD)
                                 
                                 pygame_surface = pygame.image.fromstring(img.tobytes(), img.size, img.mode)
                                 
@@ -173,18 +163,17 @@ def fetch_and_process_image_mjpeg(session, camera_name):
                             except Exception as img_e:
                                 print(f"[{camera_name}] Error processing image data: {img_e}. Frame skipped.")
                         
-                        bytes_read = bytes_read[b:] 
+                        bytes_read = bytes_read[b:]
                     
         except requests.exceptions.RequestException as e:
             print(f"[{camera_name}] Stream error: {e}. Reconnecting in 5s...")
             if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 401:
                 print(f"[{camera_name}] Stream 401. Token might be invalid. Forcing refresh.")
-                api_token = None 
+                api_token = None
             time.sleep(5)
         except Exception as e:
             print(f"[{camera_name}] Unexpected error in MJPEG stream: {e}. Reconnecting in 5s...")
             time.sleep(5)
-
 
 def fetching_thread_loop(session):
     threads = []
@@ -222,9 +211,8 @@ def main_display_loop():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
+            if event.type == pygame.K_ESCAPE:
+                running = False
 
         screen.fill((0, 0, 0))
 
@@ -246,6 +234,8 @@ if __name__ == "__main__":
     try:
         main_display_loop()
     except Exception as e:
-        print(f"Bruh: {e}")
+        print(f"A truly unhinged error occurred: {e}")
     finally:
         pygame.quit()
+        print("Exiting application.")
+        exit(0)
