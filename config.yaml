@@ -1,0 +1,22 @@
+frigate:
+  base_url: "your_frigate_instance"
+  username: "your_frigate_username"
+  password: "your_frigate_password"
+  camera_names:
+    - "camera1"
+    - "camera2"
+    - "camera3"
+    - "camera4"
+
+display:
+  resolution: [1920, 1080]
+  grid_rows: 2
+  grid_cols: 2
+  interval_seconds: 0.05
+  font_size: 30
+
+# Advanced settings (optional, will use defaults if not present)
+advanced:
+  token_lifetime_seconds: 1576800000 # Frigate token expiry. Use a very long value for the 2081 expiry.
+  image_resampling: "LANCZOS" # Options: LANCZOS, BILINEAR, NEAREST, BICUBIC
+  chunk_size: 8192 # For reading MJPEG stream chunks
