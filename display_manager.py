@@ -3,6 +3,7 @@ import datetime
 import os
 import time
 from frigate_manager import image_lock, current_images, camera_last_updated, camera_motion_states
+from motion_api_manager import toggle_camera_motion, get_manual_motion_overrides
 
 def setup_display(config):
     """Initializes Pygame and sets up the screen."""
@@ -98,6 +99,7 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
         is_mqtt_configured (bool): The status of the MQTT connection.
     """
     running = True
+    shutdown_initiated = False
     camera_names = config['frigate']['camera_names']
     show_timestamps = config['display']['show_timestamps']
     single_image_width = target_image_size[0]
@@ -118,6 +120,12 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
         last_motion_states[camera_name] = None
         last_timestamps[camera_name] = None
         last_image_versions[camera_name] = None
+    
+    # Camera selection state for manual motion control
+    selected_camera_index = 0  # Index into camera_names
+    selection_active = False   # Whether selection mode is active
+    show_selection_highlight = True
+    selection_blink_timer = 0
     
     # Create static text surfaces that don't change often
     mqtt_off_suffix = " (MQTT OFF)"
@@ -144,9 +152,45 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
         # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                shutdown_initiated = True
                 running = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_x:
-                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_x:
+                    shutdown_initiated = True
+                    running = False
+                elif event.key == pygame.K_ESCAPE:
+                    # Toggle selection mode on/off
+                    selection_active = not selection_active
+                    if selection_active:
+                        print(f"Selection mode ON - Selected: {camera_names[selected_camera_index]}")
+                    else:
+                        print("Selection mode OFF")
+                elif selection_active and event.key == pygame.K_LEFT:
+                    # Previous camera
+                    selected_camera_index = (selected_camera_index - 1) % len(camera_names)
+                elif selection_active and event.key == pygame.K_RIGHT:
+                    # Next camera
+                    selected_camera_index = (selected_camera_index + 1) % len(camera_names)
+                elif selection_active and event.key == pygame.K_UP:
+                    # Previous camera (up arrow)
+                    selected_camera_index = (selected_camera_index - 1) % len(camera_names)
+                elif selection_active and event.key == pygame.K_DOWN:
+                    # Next camera (down arrow)
+                    selected_camera_index = (selected_camera_index + 1) % len(camera_names)
+                elif selection_active and (event.key == pygame.K_SPACE or event.key == pygame.K_t):
+                    # Toggle motion state for selected camera
+                    selected_camera = camera_names[selected_camera_index]
+                    new_state = toggle_camera_motion(selected_camera)
+                    print(f"{selected_camera} motion: {new_state}")
+        
+        # Update selection highlight blink (only when selection is active)
+        if selection_active:
+            selection_blink_timer += 1
+            if selection_blink_timer > 30:  # Blink every ~0.5 seconds at 60fps
+                show_selection_highlight = not show_selection_highlight
+                selection_blink_timer = 0
+        else:
+            show_selection_highlight = False
 
         # Copy current state once to minimize lock time
         with image_lock:
@@ -156,18 +200,6 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
                 'motion_states': dict(camera_motion_states)
             }
         
-        # DEBUG: Print motion states every few seconds
-        current_time = time.time()
-        if not hasattr(main_display_loop, 'last_debug_time'):
-            main_display_loop.last_debug_time = 0
-        
-        if current_time - main_display_loop.last_debug_time > 5:  # Every 5 seconds
-            print(f"🔍 DISPLAY DEBUG - Current motion states:")
-            for cam_name in camera_names:
-                motion_state = current_state['motion_states'].get(cam_name, 'unknown')
-                print(f"  {cam_name}: motion={motion_state}")
-            main_display_loop.last_debug_time = current_time
-
         # Track if screen needs full redraw
         needs_full_redraw = False
         dirty_rects = []
@@ -205,10 +237,17 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
                 
                 # Display motion status (only update if changed)
                 if last_motion_states[camera_name] != motion_state:
-                    print(f"🎯 DISPLAY: {camera_name} motion state changed from {last_motion_states[camera_name]} to {motion_state}")
                     last_motion_states[camera_name] = motion_state
                     
                 motion_status = "Motion ON" if motion_state else "Motion OFF"
+                
+                # Check if this camera has manual override
+                manual_overrides = get_manual_motion_overrides()
+                manual_override = manual_overrides.get(camera_name, None)
+                
+                if manual_override is not None:
+                    override_text = " (MANUAL)" if manual_override else " (MANUAL)"
+                    motion_status += override_text
                 
                 # Build status text
                 if not is_mqtt_configured:
@@ -216,9 +255,31 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
                 else:
                     status_text = f"{camera_name}: {motion_status}"
 
-                status_color = (255, 255, 0) if motion_state else (0, 255, 0)
+                # Color coding: Red=Manual ON, Blue=Manual OFF, Yellow=Auto ON, Green=Auto OFF
+                if manual_override is True:
+                    status_color = (255, 100, 100)  # Red for manual ON
+                elif manual_override is False:
+                    status_color = (100, 100, 255)  # Blue for manual OFF
+                elif motion_state:
+                    status_color = (255, 255, 0)    # Yellow for auto ON
+                else:
+                    status_color = (0, 255, 0)      # Green for auto OFF
+                
                 status_surface = get_cached_text(status_text, status_color)
                 screen.blit(status_surface, (grid_pos[0] + 10, grid_pos[1] + 10))
+
+                # Draw selection highlight for current camera
+                if i == selected_camera_index and show_selection_highlight and selection_active:
+                    # Draw a bright border around selected camera - fix positioning
+                    border_color = (0, 255, 255)  # Cyan
+                    border_width = 3
+                    
+                    # Draw border INSIDE the image area to avoid boundary issues
+                    border_rect = pygame.Rect(grid_pos[0], 
+                                            grid_pos[1],
+                                            target_image_size[0],
+                                            target_image_size[1])
+                    pygame.draw.rect(screen, border_color, border_rect, border_width)
 
                 # Conditionally display timestamp
                 if show_timestamps and last_update_ts > 0:
@@ -235,6 +296,31 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
                             topright=(cell_right_edge - 10, grid_pos[1] + 10)
                         )
                         screen.blit(timestamp_text, timestamp_rect)
+
+        # Draw help text at bottom of screen
+        if selection_active:
+            help_text = "←→↑↓ Select Camera | SPACE/T Toggle Motion | ESC Exit Selection | X Quit"
+            selected_cam_name = camera_names[selected_camera_index]
+            manual_override_status = get_manual_motion_overrides().get(selected_cam_name, None)
+            
+            if manual_override_status is None:
+                mode_text = "AUTO"
+            elif manual_override_status:
+                mode_text = "MANUAL ON"
+            else:
+                mode_text = "MANUAL OFF"
+                
+            status_line = f"SELECTION MODE | {selected_cam_name} ({mode_text}) | {help_text}"
+            help_color = (255, 255, 0)  # Yellow when in selection mode
+        else:
+            help_text = "ESC Enter Selection Mode | X Quit"
+            status_line = f"{help_text}"
+            help_color = (255, 255, 255)  # White when not in selection mode
+        
+        help_surface = get_cached_text(status_line, help_color)
+        help_rect = help_surface.get_rect(centerx=screen.get_width() // 2, 
+                                        bottom=screen.get_height() - 10)
+        screen.blit(help_surface, help_rect)
 
         # Update display
         pygame.display.flip()
@@ -253,3 +339,11 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
                 elif isinstance(key, int) and current_time - key < 3600:  # Keep recent timestamps
                     new_cache[key] = value
             text_cache = new_cache
+
+    # Graceful shutdown sequence
+    if shutdown_initiated:
+        print("Initiating graceful shutdown...")
+        display_splash_screen(screen, font, "Shutting down FeatherGate...", config)
+        time.sleep(1.5)  # Show shutdown message for 1.5 seconds
+        display_splash_screen(screen, font, "Goodbye!", config)
+        time.sleep(1)  # Show goodbye message for 1 second

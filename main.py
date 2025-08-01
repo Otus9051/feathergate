@@ -39,6 +39,10 @@ def main():
         pygame.quit()
         sys.exit()
 
+    # After getting the token, determine motion detection mode
+    display_splash_screen(screen, font, "Configuring motion detection...", config)
+    from motion_api_manager import sync_initial_motion_state, start_api_polling_mode
+    
     display_splash_screen(screen, font, "Initializing threads...", config)
     
     # Initialize global state and placeholders
@@ -51,18 +55,35 @@ def main():
     single_image_height = display_resolution[1] // grid_rows
     target_image_size = (single_image_width, single_image_height)
 
-    # Check if the MQTT configuration exists and is enabled
-    mqtt_config = config.get('mqtt')
-    if mqtt_config and mqtt_config.get('enabled', False) and all(key in mqtt_config for key in ['broker_host', 'broker_port']):
+    # Configure motion detection mode
+    mqtt_config = config.get('mqtt', {})
+    api_only_mode = mqtt_config.get('api_only_mode', False)
+    mqtt_enabled = mqtt_config.get('enabled', False)
+    mqtt_available = mqtt_enabled and all(key in mqtt_config for key in ['broker_host', 'broker_port'])
+    
+    if api_only_mode:
+        # User specifically wants API-only mode
+        is_mqtt_configured = False
+        print("API-only mode enabled")
+        start_api_polling_mode(config, session)
+        
+    elif mqtt_available:
+        # Hybrid mode: MQTT for real-time + API for initial state
         is_mqtt_configured = True
-        print("📡 MAIN: MQTT is configured, starting MQTT thread...")
-        # Start MQTT thread
+        print("Hybrid mode - MQTT + API")
+        
+        # Start MQTT thread for real-time updates
         mqtt_t = threading.Thread(target=mqtt_thread_loop, args=(config,), daemon=True)
         mqtt_t.start()
-        print("📡 MAIN: MQTT thread started")
+        
+        # Get initial state from API
+        sync_initial_motion_state(config, session)
+        
     else:
+        # No MQTT available, fall back to API-only
         is_mqtt_configured = False
-        print("❌ MAIN: MQTT is disabled or configuration is missing/incomplete. Motion-based updates will be disabled.")
+        print("MQTT not available - using API fallback")
+        start_api_polling_mode(config, session)
     
     # Initialize initial camera update intervals and placeholders based on MQTT status
     default_interval = config['display']['interval_rate_min']
@@ -77,7 +98,6 @@ def main():
             camera_last_updated[name] = 0
             camera_intervals[name] = default_interval
             camera_motion_states[name] = False
-            print(f"📋 MAIN: Initialized {name} - interval={default_interval}, motion=False")
     
     # Start image fetching threads
     for camera_name in camera_names:
