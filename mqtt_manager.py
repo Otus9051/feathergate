@@ -18,38 +18,81 @@ def on_connect(client, userdata, flags, rc, properties):
 
 def on_message(client, userdata, msg):
     """Callback function for when an MQTT message is received."""
+    print(f"🚨 MQTT MESSAGE RECEIVED!")
+    print(f"  Topic: {msg.topic}")
+    print(f"  Payload: {msg.payload}")
+    
     config = userdata['config']
     frigate_topic_prefix = config['mqtt']['frigate_topic_prefix']
     camera_names = config['frigate']['camera_names']
     
+    print(f"  Config prefix: '{frigate_topic_prefix}'")
+    print(f"  Config cameras: {camera_names}")
+    
     topic_parts = msg.topic.split('/')
     expected_prefix_parts = frigate_topic_prefix.split('/')
     
-    if len(topic_parts) == len(expected_prefix_parts) + 2 and \
-       topic_parts[:len(expected_prefix_parts)] == expected_prefix_parts and \
-       topic_parts[len(expected_prefix_parts) + 1] == 'motion': 
-        
+    print(f"  Topic parts: {topic_parts}")
+    print(f"  Expected prefix parts: {expected_prefix_parts}")
+    
+    # Debug the conditions
+    condition1 = len(topic_parts) == len(expected_prefix_parts) + 2
+    condition2 = topic_parts[:len(expected_prefix_parts)] == expected_prefix_parts
+    condition3 = len(topic_parts) > len(expected_prefix_parts) + 1 and topic_parts[len(expected_prefix_parts) + 1] == 'motion'
+    
+    print(f"  Condition 1 (length {len(topic_parts)} == {len(expected_prefix_parts) + 2}): {condition1}")
+    print(f"  Condition 2 (prefix match): {condition2}")
+    print(f"  Condition 3 (motion suffix): {condition3}")
+    
+    if condition1 and condition2 and condition3:
         camera_name_index = len(expected_prefix_parts) 
         camera_name = topic_parts[camera_name_index]
+        
+        print(f"  ✅ Topic matches! Camera: '{camera_name}'")
+        print(f"  Camera in config: {camera_name in camera_names}")
         
         if camera_name in camera_names:
             try:
                 raw_payload = msg.payload.decode()
                 payload = raw_payload.strip().upper() 
                 
+                print(f"  Raw payload: '{raw_payload}'")
+                print(f"  Processed payload: '{payload}'")
+                
+                # Check current state before update
+                with image_lock:
+                    old_interval = camera_intervals.get(camera_name, 'unknown')
+                    old_motion = camera_motion_states.get(camera_name, 'unknown')
+                
+                print(f"  Before update: interval={old_interval}, motion={old_motion}")
+                
                 with image_lock:
                     if payload == "ON": 
                         camera_intervals[camera_name] = config['display']['interval_rate_max']
                         camera_motion_states[camera_name] = True
+                        print(f"  ✅ SET MOTION ON: interval={config['display']['interval_rate_max']}")
                     elif payload == "OFF": 
                         camera_intervals[camera_name] = config['display']['interval_rate_min']
                         camera_motion_states[camera_name] = False
+                        print(f"  ✅ SET MOTION OFF: interval={config['display']['interval_rate_min']}")
                     else:
-                        print(f"[{camera_name}] Unrecognised payload: '{raw_payload}'. Expected 'ON' or 'OFF'.")
+                        print(f"  ❌ Unrecognised payload: '{raw_payload}'. Expected 'ON' or 'OFF'.")
+                
+                # Check state after update
+                with image_lock:
+                    new_interval = camera_intervals.get(camera_name, 'unknown')
+                    new_motion = camera_motion_states.get(camera_name, 'unknown')
+                
+                print(f"  After update: interval={new_interval}, motion={new_motion}")
+                
             except Exception as e:
-                print(f"Error processing MQTT message for {camera_name}: {e}")
+                print(f"  ❌ Error processing MQTT message for {camera_name}: {e}")
+                import traceback
+                traceback.print_exc()
         else:
-            print(f"Received MQTT message for unknown camera: {camera_name} from topic {msg.topic}")
+            print(f"  ❌ Unknown camera: {camera_name} from topic {msg.topic}")
+    else:
+        print(f"  ❌ Topic doesn't match motion pattern - IGNORING")
 
 def mqtt_thread_loop(config):
     """

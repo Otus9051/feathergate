@@ -85,6 +85,10 @@ def fetch_and_process_image(config, session, camera_name, target_image_size):
                     get_frigate_token(config, session)
                 headers = {"Authorization": f"Bearer {api_token}"}
                 current_interval = camera_intervals.get(camera_name, config['display']['interval_rate_min'])
+                current_motion_state = camera_motion_states.get(camera_name, False)
+                
+                # DEBUG: Print current state for this camera
+                print(f"🔍 FRIGATE_MANAGER [{camera_name}]: interval={current_interval}, motion={current_motion_state}")
 
             time_to_wait = current_interval - (time.time() - last_fetch_time)
             if time_to_wait > 0:
@@ -104,6 +108,11 @@ def fetch_and_process_image(config, session, camera_name, target_image_size):
             with image_lock:
                 current_images[camera_name] = pygame_image
                 camera_last_updated[camera_name] = time.time()
+                
+                # DEBUG: Show current states when image is updated
+                current_motion = camera_motion_states.get(camera_name, False)
+                current_interval = camera_intervals.get(camera_name, 'unknown')
+                print(f"📸 IMAGE UPDATED [{camera_name}]: motion={current_motion}, interval={current_interval}")
 
         except requests.exceptions.RequestException as e:
             print(f"Error fetching image for {camera_name}: {e}")

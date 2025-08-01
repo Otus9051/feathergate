@@ -55,12 +55,14 @@ def main():
     mqtt_config = config.get('mqtt')
     if mqtt_config and mqtt_config.get('enabled', False) and all(key in mqtt_config for key in ['broker_host', 'broker_port']):
         is_mqtt_configured = True
+        print("📡 MAIN: MQTT is configured, starting MQTT thread...")
         # Start MQTT thread
         mqtt_t = threading.Thread(target=mqtt_thread_loop, args=(config,), daemon=True)
         mqtt_t.start()
+        print("📡 MAIN: MQTT thread started")
     else:
         is_mqtt_configured = False
-        print("MQTT is disabled or configuration is missing/incomplete. Motion-based updates will be disabled.")
+        print("❌ MAIN: MQTT is disabled or configuration is missing/incomplete. Motion-based updates will be disabled.")
     
     # Initialize initial camera update intervals and placeholders based on MQTT status
     default_interval = config['display']['interval_rate_min']
@@ -75,6 +77,7 @@ def main():
             camera_last_updated[name] = 0
             camera_intervals[name] = default_interval
             camera_motion_states[name] = False
+            print(f"📋 MAIN: Initialized {name} - interval={default_interval}, motion=False")
     
     # Start image fetching threads
     for camera_name in camera_names:
