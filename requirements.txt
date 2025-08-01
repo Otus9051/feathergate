@@ -1,5 +1,5 @@
 requests
-pygame
+pygame-ce
 pillow
 pyyaml
 paho-mqtt

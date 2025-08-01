@@ -17,6 +17,17 @@ token_refresh_time = 0
 # This is a placeholder; its value is set dynamically by main.py after reading the config.
 is_mqtt_configured = False
 
+# Wake-up events for each camera to interrupt sleep when motion state changes
+camera_wake_events = {}
+
+def wake_camera_thread(camera_name):
+    """
+    Wake up a specific camera's image fetching thread immediately.
+    Used when motion state changes to avoid delays.
+    """
+    if camera_name in camera_wake_events:
+        camera_wake_events[camera_name].set()
+
 def get_frigate_token(config, session):
     """
     Fetches an auth token from the Frigate API.
@@ -70,8 +81,12 @@ def fetch_and_process_image(config, session, camera_name, target_image_size):
         camera_name (str): The name of the camera to fetch.
         target_image_size (tuple): The desired size for the image surface.
     """
-    global api_token, image_lock
+    global api_token, image_lock, camera_wake_events
     last_fetch_time = time.time()
+    
+    # Create wake-up event for this camera
+    if camera_name not in camera_wake_events:
+        camera_wake_events[camera_name] = threading.Event()
     
     frigate_base_url = config['frigate']['base_url']
     image_resampling_method = getattr(Image.Resampling, config.get('advanced', {}).get('image_resampling', 'BICUBIC').upper(), Image.Resampling.BICUBIC)
@@ -86,9 +101,14 @@ def fetch_and_process_image(config, session, camera_name, target_image_size):
                 headers = {"Authorization": f"Bearer {api_token}"}
                 current_interval = camera_intervals.get(camera_name, config['display']['interval_rate_min'])
 
+            # Calculate how long to wait, but allow wake-up events to interrupt
             time_to_wait = current_interval - (time.time() - last_fetch_time)
             if time_to_wait > 0:
-                time.sleep(time_to_wait)
+                # Use event.wait() with timeout instead of time.sleep()
+                # This allows the thread to be woken up immediately when motion state changes
+                camera_wake_events[camera_name].wait(timeout=time_to_wait)
+                # Clear the event for next time
+                camera_wake_events[camera_name].clear()
             
             last_fetch_time = time.time() 
 
