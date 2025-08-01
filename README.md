@@ -50,3 +50,9 @@ To exit, press `x`
   - frigate_manager.py starts fetching latest JPGs for each camera based on interval rates, motion, and MQTT status.
   - display_manager.py scales JPGs with Pillow and shows them accordingly in the grid along with other display options like timestamps.
   - Loop runs indefinitely until exit.
+
+## Credits:
+- PyGame and SDL for Display
+- Frigate NVR APIs
+- EMQX MQTT Broker
+- itsbhanusharma for testing and documentation
