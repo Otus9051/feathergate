@@ -2,3 +2,4 @@ requests
 pygame
 pillow
 pyyaml
+paho-mqtt
