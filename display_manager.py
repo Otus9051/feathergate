@@ -299,7 +299,7 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
 
         # Draw help text at bottom of screen
         if selection_active:
-            help_text = "←→↑↓ Select Camera | SPACE/T Toggle Motion | ESC Exit Selection | X Quit"
+            help_text = "LRUD Select Camera | SPACE/T Toggle Motion | ESC Exit Selection | X Quit"
             selected_cam_name = camera_names[selected_camera_index]
             manual_override_status = get_manual_motion_overrides().get(selected_cam_name, None)
             
@@ -320,6 +320,12 @@ def main_display_loop(config, screen, font, grid_positions, target_image_size, i
         help_surface = get_cached_text(status_line, help_color)
         help_rect = help_surface.get_rect(centerx=screen.get_width() // 2, 
                                         bottom=screen.get_height() - 10)
+        
+        # Draw black background rectangle behind help text
+        padding = 8
+        bg_rect = help_rect.inflate(padding * 2, padding * 2)
+        pygame.draw.rect(screen, (0, 0, 0), bg_rect)
+        
         screen.blit(help_surface, help_rect)
 
         # Update display
