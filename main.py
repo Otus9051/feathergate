@@ -1,3 +1,6 @@
+import os
+os.environ['PYGAME_BLEND_ALPHA_SDL2'] = '1'
+
 import requests
 import threading
 import time

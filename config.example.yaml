@@ -1,0 +1,33 @@
+frigate:
+  base_url: "frigate_url"
+  username: "username"
+  password: "password"
+  camera_names:
+    - "camera1"
+    - "camera2"
+    - "camera3"
+    - "camera4"
+
+display:
+  resolution: [1920, 1080]
+  grid_rows: 2
+  grid_cols: 2
+  interval_seconds: 0.05
+  interval_rate_min: 5 # Minimum rate for interval_seconds
+  interval_rate_max: 0.1 # Maximum rate for interval_seconds
+  font_size: 24
+  show_timestamps: true
+  splash_image_path: "feathergate.png"
+
+mqtt: # MQTT configuration for Dynamic Refresh
+  enabled: true # Set to false if you do not want to use MQTT
+  broker_host: # e.g., 192.168.1.100
+  broker_port: 1883
+  username:  # Optional
+  password:  # Optional
+  frigate_topic_prefix: frigate # This is Frigate's default
+
+# Advanced settings (optional, will use defaults if not present)
+advanced:
+  token_lifetime_seconds: 1576800000 # Frigate token expiry. Use a very long value for the 2081 expiry.
+  image_resampling: "BICUBIC" # Options: LANCZOS, BILINEAR, NEAREST, BICUBIC
