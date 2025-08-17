@@ -38,21 +38,10 @@ python3 main.py
 ```
 To exit, press `x`
 
-## Application Workflow:
-### 1. Initialization:
-  - main.py invokes config_manager.py to read the config.
-  - PyGame and Display started by main.py, splash screen shown.
-  - Session token acquired by frigate_manager.py.
-  - Camera grid initialized.
-  - MQTT Configuration checked and verified.
-  - `interval_rate_min` and `interval_rate_max` set from config.
-### 2. Display:
-  - frigate_manager.py starts fetching latest JPGs for each camera based on interval rates, motion, and MQTT status.
-  - display_manager.py scales JPGs with Pillow and shows them accordingly in the grid along with other display options like timestamps.
-  - Loop runs indefinitely until exit.
+## Check Wiki for documentation
 
 ## Credits:
 - PyGame and SDL for Display
 - Frigate NVR APIs
 - EMQX MQTT Broker
-- itsbhanusharma for testing and documentation
+- itsbhanusharma for testing
