@@ -29,7 +29,7 @@ def main():
     screen, font = setup_display(config)
 
     # Display initial splash screens
-    display_splash_screen(screen, font, "FeatherGate by Otus9051 & itsbhanusharma", config)
+    display_splash_screen(screen, font, "FeatherGate by Otus9051", config)
     time.sleep(2)
     display_splash_screen(screen, font, "Authenticating with Frigate...", config)
 
