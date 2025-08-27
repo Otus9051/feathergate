@@ -39,6 +39,7 @@ python3 main.py
 To exit, press `x`
 
 ## Check Wiki for documentation
+Or you can also go to https://deepwiki.com/Otus9051/feathergate/1-overview because I don't have time
 
 ## Credits:
 - PyGame and SDL for Display
