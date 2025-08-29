@@ -45,4 +45,3 @@ Or you can also go to https://deepwiki.com/Otus9051/feathergate/1-overview becau
 - PyGame and SDL for Display
 - Frigate NVR APIs
 - EMQX MQTT Broker
-- itsbhanusharma for testing
